@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added the `display.backgroundFrameRate` setting (30 fps default; 15, 10, 5 or 2) to cap redraws for streaming output and spinners and save CPU and battery; typing still renders immediately
+
 ## [18.10.2] - 2026-10-12
 
 ### Added

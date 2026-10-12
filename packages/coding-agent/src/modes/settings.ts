@@ -18,6 +18,7 @@ import { WORD_COMPLETION_METHODS } from "@oh-my-pi/pi-tui/prompt/word-completion
 import { applyHyperlinkSetting } from "@oh-my-pi/pi-tui/render/hyperlink";
 import { setInlineImageMaxColumns, setInlineImageMaxRows } from "@oh-my-pi/pi-tui/render/render-utils";
 import { setShimmerMode } from "@oh-my-pi/pi-tui/theme/shimmer";
+import { setBackgroundFrameRate } from "@oh-my-pi/pi-tui/render-pacing";
 import { setAutoThemeMapping, setColorBlindMode, setSymbolPreset } from "@oh-my-pi/pi-tui/theme/theme";
 
 const EMPTY_UNKNOWN_RECORD: Record<string, unknown> = {};
@@ -644,6 +645,28 @@ export const cfgDisplaySmoothStreaming = register({
 		description: "Reveal assistant text and streamed tool input smoothly while chunks arrive",
 	},
 });
+
+export const cfgDisplayBackgroundFrameRate = register({
+	id: "display.backgroundFrameRate",
+	type: "enum",
+	values: ["30", "15", "10", "5", "2"] as const,
+	default: "30",
+	ui: {
+		tab: "appearance",
+		group: "Display",
+		label: "Background Frame Rate",
+		description:
+			"Maximum redraws per second for streaming output and spinners; typing always renders immediately. Lower values save CPU and battery",
+		options: [
+			{ value: "30", label: "30 fps", description: "Default" },
+			{ value: "15", label: "15 fps", description: "Half the redraws" },
+			{ value: "10", label: "10 fps", description: "Lighter on laptops" },
+			{ value: "5", label: "5 fps", description: "Low power" },
+			{ value: "2", label: "2 fps", description: "Minimal redraws; spinners step once per frame" },
+		],
+	},
+});
+effect(cfgDisplayBackgroundFrameRate, fps => setBackgroundFrameRate(Number(fps)));
 
 export const cfgDisplayHideToolActivity = register({
 	id: "display.hideToolActivity",

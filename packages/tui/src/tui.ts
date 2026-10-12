@@ -46,6 +46,7 @@ import {
 	TERMINAL,
 } from "./terminal-capabilities";
 import { compositeLineAt } from "./render/composite";
+import { getBackgroundRenderIntervalMs } from "./render-pacing";
 import {
 	Ellipsis,
 	getWidthConfigEpoch,
@@ -929,6 +930,14 @@ export class TUI extends Container {
 	#lastFrameCostMs = 0;
 	static readonly #MIN_RENDER_INTERVAL_MS = 1000 / 30;
 	static readonly #INPUT_RENDER_GRACE_MS = TUI.#MIN_RENDER_INTERVAL_MS;
+	/**
+	 * Renders requested within this window after a keystroke use the full
+	 * cadence even when a lower background frame rate is configured
+	 * (`setBackgroundFrameRate`), so typing never waits on the background cap.
+	 */
+	static readonly #INPUT_RESPONSIVE_WINDOW_MS = 250;
+	#lastInputAtMs = Number.NEGATIVE_INFINITY;
+	#renderTimerDueAtMs = 0;
 	/**
 	 * Cap on the adaptive floor derived from `#lastFrameCostMs`. Bounds the UI
 	 * responsiveness at ~5 fps under sustained heavy renders — anything slower
@@ -2787,7 +2796,11 @@ export class TUI extends Container {
 		}
 		const now = this.#renderScheduler.now();
 		const elapsed = now - this.#lastRenderAt;
-		const cadenceDelay = Math.max(0, TUI.#MIN_RENDER_INTERVAL_MS - elapsed);
+		const interval =
+			now - this.#lastInputAtMs < TUI.#INPUT_RESPONSIVE_WINDOW_MS
+				? TUI.#MIN_RENDER_INTERVAL_MS
+				: Math.max(TUI.#MIN_RENDER_INTERVAL_MS, getBackgroundRenderIntervalMs());
+		const cadenceDelay = Math.max(0, interval - elapsed);
 		// Adaptive backpressure — target ~50% render duty cycle: the next frame
 		// starts no sooner than `last_frame_end + last_frame_cost`, i.e.
 		// `last_frame_start + 2 × last_frame_cost`. So `elapsed` (which counts
@@ -2800,7 +2813,22 @@ export class TUI extends Container {
 		// Native frames are paced by the terminal's acknowledgements (credits),
 		// not by the row renderer's cadence.
 		const delay = this.#nativeLive ? 0 : Math.max(cadenceDelay, adaptiveDelay, inputGraceDelay);
+		this.#renderTimerDueAtMs = now + delay;
 		this.#renderTimer = this.#renderScheduler.scheduleRender(this.#runScheduledRender, delay);
+	}
+
+	/**
+	 * Note a keystroke and pull forward a pending background render that was
+	 * scheduled at the (possibly lower) background frame rate.
+	 */
+	#markUserInput(): void {
+		const now = this.#renderScheduler.now();
+		this.#lastInputAtMs = now;
+		if (this.#renderTimer && this.#renderTimerDueAtMs > now + TUI.#MIN_RENDER_INTERVAL_MS) {
+			this.#renderTimer.cancel();
+			this.#renderTimer = undefined;
+			this.#scheduleRender();
+		}
 	}
 
 	/**
@@ -2900,6 +2928,8 @@ export class TUI extends Container {
 				this.setFocus(focusedOverlay.preFocus);
 			}
 		}
+
+		this.#markUserInput();
 
 		// Ctrl+C/Esc use app-level double-press windows. Give those gestures one
 		// frame to drain queued input before an ordinary repaint; delaying every

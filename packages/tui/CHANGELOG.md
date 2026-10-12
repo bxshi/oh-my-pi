@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added `setBackgroundFrameRate()` to cap the redraw rate of non-input renders (streaming text, loader spinners) while keystrokes keep the full 30 fps cadence
+
 ## [18.10.2] - 2026-10-12
 
 ### Added
